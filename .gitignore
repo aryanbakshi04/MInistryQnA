@@ -1,0 +1,6 @@
+azvenv/
+data/
+cache/
+*.sqlite3
+__pycache__/
+*.pyc
