@@ -121,6 +121,7 @@ def main():
 
         user_question = st.text_area(
             "Ask your question:",
+            placeholder="",
             height=100,
         )
 
