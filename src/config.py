@@ -2,44 +2,38 @@ import os
 import logging
 from dotenv import load_dotenv
 
-# Load environment variables
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+
 class Config:
-    # Database Configuration
+
     POSTGRESQL_URL = os.getenv("POSTGRESQL_URL")
-    
-    # API Keys
+
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    
-    # Azure Storage
+
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     AZURE_STORAGE_CONTAINER = os.getenv("AZURE_STORAGE_CONTAINER", "MinistryQnA")
-    
-    # Application Settings
+
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-    
-    # Embedding Model
+
     EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-    
-    # Sansad API Configuration (from your existing sansad_client.py)
+
     SANSAD_API_URL = "https://sansad.in/qetFile/loksabhaquestions"
     PDF_BASE_URL = "https://sansad.in"
     PDF_CACHE_DIR = "data/pdf_cache"
-    
-    # API Parameters  
+
     DEFAULT_LOK_SABHA = "17"
     DEFAULT_SESSION = "1"
     DEFAULT_PAGE_SIZE = 20
-    
-    # Request Configuration
+
     MAX_RETRIES = 3
     RATE_LIMIT_DELAY = 1.0
     TIMEOUT = 30
-    
+
     MINISTRIES = [
         "Ministry of Agriculture and Farmers Welfare",
         "Ministry of Chemicals and Fertilizers",
@@ -97,30 +91,30 @@ class Config:
 
     @classmethod
     def validate_environment(cls):
-        """Validate that all required environment variables are set"""
+
         required_vars = [
             ("POSTGRESQL_URL", cls.POSTGRESQL_URL),
-            ("GEMINI_API_KEY", cls.GEMINI_API_KEY)
+            ("GEMINI_API_KEY", cls.GEMINI_API_KEY),
         ]
-        
+
         missing_vars = []
         for var_name, var_value in required_vars:
             if not var_value:
                 missing_vars.append(var_name)
-        
+
         if missing_vars:
             logger.error(f"Missing required environment variables: {missing_vars}")
             return False
-        
+
         return True
-    
+
     @classmethod
     def get_log_level(cls):
-        """Get logging level from configuration"""
+
         level_map = {
-            'DEBUG': logging.DEBUG,
-            'INFO': logging.INFO,
-            'WARNING': logging.WARNING,
-            'ERROR': logging.ERROR
+            "DEBUG": logging.DEBUG,
+            "INFO": logging.INFO,
+            "WARNING": logging.WARNING,
+            "ERROR": logging.ERROR,
         }
         return level_map.get(cls.LOG_LEVEL.upper(), logging.INFO)

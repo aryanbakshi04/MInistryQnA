@@ -67,9 +67,9 @@ class SansadClient:
                         headers=self.headers,
                         timeout=Config.TIMEOUT,
                     ) as response:
-                        if response.status == 429:  # Rate limited
+                        if response.status == 429:
                             retry_count += 1
-                            wait_time = delay * (2**retry_count)  # Exponential backoff
+                            wait_time = delay * (2**retry_count)
                             logger.warning(
                                 f"Rate limited. Waiting {wait_time} seconds before retry."
                             )
@@ -197,7 +197,7 @@ class SansadClient:
             return None
 
     async def _process_response(self, data: Dict) -> List[Dict[str, Any]]:
-        """Process API response with error handling"""
+
         processed_questions = []
 
         try:

@@ -8,3 +8,4 @@ scripts/
 bool
 str
 .env
+check.py

@@ -9,12 +9,13 @@ from src.document_processor import DocumentProcessor
 from src.llm_client import LLMClient
 from src.sansad_client import SansadClient
 
-# Configure logging
+
 logging.basicConfig(level=Config.get_log_level())
 logger = logging.getLogger(__name__)
 
+
 def is_irrelevant_response(answer_text: str) -> bool:
-    """Check if the LLM response indicates the query was irrelevant"""
+
     irrelevance_indicators = [
         "not relevant to",
         "outside the scope",
@@ -24,225 +25,224 @@ def is_irrelevant_response(answer_text: str) -> bool:
         "cannot answer this question as it is not relevant",
         "appears to be outside the scope of parliamentary and governmental matters",
         "not relevant to the ministry's affairs",
-        "not relevant to the ministry's functions"
+        "not relevant to the ministry's functions",
     ]
-    
+
     answer_lower = answer_text.lower()
     return any(indicator in answer_lower for indicator in irrelevance_indicators)
 
+
 def get_document_sas_url(ministry: str, filename: str) -> str:
-    """Generate Azure Blob Storage SAS URL for secure document access"""
+
     try:
-        # Initialize blob service client
-        blob_service_client = BlobServiceClient.from_connection_string(Config.AZURE_STORAGE_CONNECTION_STRING)
-        
-        # Container and blob names
-        container_name = "ministrydatastorage"  # Your container name
+
+        blob_service_client = BlobServiceClient.from_connection_string(
+            Config.AZURE_STORAGE_CONNECTION_STRING
+        )
+
+        container_name = "ministrydatastorage"
         blob_name = f"ministries/{ministry}/{filename}"
-        
-        # Check if blob exists
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-        
+
+        blob_client = blob_service_client.get_blob_client(
+            container=container_name, blob=blob_name
+        )
+
         try:
-            # Try to get blob properties to verify it exists
+
             blob_client.get_blob_properties()
         except Exception as e:
             logger.warning(f"Blob not found: {blob_name}")
             return None
-        
-        # Generate SAS token (valid for 1 hour)
+
         sas_token = generate_blob_sas(
             account_name=blob_service_client.account_name,
             container_name=container_name,
             blob_name=blob_name,
             account_key=blob_service_client.credential.account_key,
             permission=BlobSasPermissions(read=True),
-            expiry=datetime.utcnow() + timedelta(hours=1)  # 1 hour expiry
+            expiry=datetime.utcnow() + timedelta(hours=1),
         )
-        
-        # Construct full URL with SAS token
+
         blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{container_name}/{blob_name}?{sas_token}"
-        
+
         return blob_url
-        
+
     except Exception as e:
         logger.error(f"Error generating SAS URL for {filename}: {e}")
         return None
 
+
 def extract_filename_from_metadata(metadata: dict) -> str:
-    """Extract filename from document metadata"""
-    # Try different possible keys for filename
-    for key in ['filename', 'source', 'file', 'document_name']:
+
+    for key in ["filename", "source", "file", "document_name"]:
         if key in metadata and metadata[key]:
             filename = metadata[key]
-            # If it's a full path, extract just the filename
-            if '/' in filename:
-                filename = filename.split('/')[-1]
+
+            if "/" in filename:
+                filename = filename.split("/")[-1]
             return filename
-    
-    # If no filename found, return a generic name
+
     return "document.pdf"
+
 
 def main():
     st.set_page_config(
-        page_title="Parliamentary Q&A Assistant",
-        page_icon="🏛️",
-        layout="wide"
+        page_title="Parliamentary Q&A Assistant", page_icon="🏛️", layout="wide"
     )
-    
+
     st.title("Parliamentary Q&A Assistant")
     st.markdown("Ask questions about parliamentary affairs by ministry")
-    
-    # Initialize components
+
     if not Config.validate_environment():
-        st.error("Missing required environment variables. Please check your configuration.")
+        st.error(
+            "Missing required environment variables. Please check your configuration."
+        )
         st.stop()
-    
+
     try:
-        # Initialize services
+
         vector_store = AzureVectorStore()
         llm_client = LLMClient()
         sansad_client = SansadClient()
-        
-        # Sidebar for ministry selection
+
         st.sidebar.header("Settings")
-        
-        # Get available ministries
+
         ministries = list(vector_store.indexed_ministries)
         if not ministries:
             st.warning("No ministries indexed yet. Please run the indexing process.")
-            st.sidebar.info("To index ministries, run: `python scripts/create_ministry_database.py`")
+            st.sidebar.info(
+                "To index ministries, run: `python scripts/create_ministry_database.py`"
+            )
             st.stop()
-            
+
         selected_ministry = st.sidebar.selectbox(
-            "Select Ministry",
-            ministries,
-            help="Choose a ministry to search within"
+            "Select Ministry", ministries, help="Choose a ministry to search within"
         )
-        
-        # Main query interface
+
         user_question = st.text_area(
             "Ask your question:",
             placeholder="e.g., What is the budget allocation for education?",
-            height=100
+            height=100,
         )
-        
+
         search_button = st.button("Get Answer", type="primary")
-        
+
         if search_button and user_question.strip():
             with st.spinner("Loading, Please wait..."):
                 try:
-                    # Search for relevant documents using PostgreSQL
+
                     relevant_docs = vector_store.search_by_text(
-                        user_question, 
-                        selected_ministry, 
-                        n_results=5
+                        user_question, selected_ministry, n_results=5
                     )
-                    
+
                     if relevant_docs:
-                        # Generate answer using LLM
-                        context = "\n\n".join([doc['text'] for doc in relevant_docs])
-                        answer = llm_client.generate_answer(user_question, context, selected_ministry)
-                        
-                        # Display results
+
+                        context = "\n\n".join([doc["text"] for doc in relevant_docs])
+                        answer = llm_client.generate_answer(
+                            user_question, context, selected_ministry
+                        )
+
                         st.subheader("Ministry Response")
                         st.write(answer)
-                        
-                        # Check if the answer indicates irrelevant query
+
                         is_irrelevant = is_irrelevant_response(answer)
-                        
-                        # Show sources automatically for relevant queries only
+
                         if not is_irrelevant:
                             with st.expander("View Source Documents"):
                                 for i, doc in enumerate(relevant_docs, 1):
                                     st.markdown(f"**Source {i}**")
                                     st.markdown(doc["text"])
-                                    
+
                                     metadata = doc.get("metadata", {})
                                     filename = extract_filename_from_metadata(metadata)
-                                    
-                                    # Generate secure Azure Blob Storage URL
-                                    if filename != "document.pdf":  # If we found a real filename
+
+                                    if filename != "document.pdf":
                                         try:
-                                            # Generate SAS URL for download/viewing
-                                            with st.spinner(f"Generating secure link for {filename}..."):
-                                                doc_url = get_document_sas_url(selected_ministry, filename)
-                                            
+
+                                            with st.spinner(
+                                                f"Generating secure link for {filename}..."
+                                            ):
+                                                doc_url = get_document_sas_url(
+                                                    selected_ministry, filename
+                                                )
+
                                             if doc_url:
-                                                # Create download button using Azure Blob
+
                                                 try:
-                                                    # Get blob content for download
-                                                    blob_service_client = BlobServiceClient.from_connection_string(Config.AZURE_STORAGE_CONNECTION_STRING)
-                                                    container_name = "ministrydatastorage"
+
+                                                    blob_service_client = BlobServiceClient.from_connection_string(
+                                                        Config.AZURE_STORAGE_CONNECTION_STRING
+                                                    )
+                                                    container_name = (
+                                                        "ministrydatastorage"
+                                                    )
                                                     blob_name = f"ministries/{selected_ministry}/{filename}"
-                                                    blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-                                                    
-                                                    # Download blob content
-                                                    pdf_bytes = blob_client.download_blob().readall()
-                                                    
-                                                    # Download button
-                                                    # st.download_button(
-                                                    #     label="Download PDF",
-                                                    #     data=pdf_bytes,
-                                                    #     file_name=filename,
-                                                    #     mime="application/pdf",
-                                                    #     key=f"download_{i}",
-                                                    # )
-                                                    
-                                                    # View PDF link (opens in new tab)
-                                                    st.markdown(f'<a href="{doc_url}" target="_blank">🔗 View PDF in Browser</a>', unsafe_allow_html=True)
-                                                    
+                                                    blob_client = blob_service_client.get_blob_client(
+                                                        container=container_name,
+                                                        blob=blob_name,
+                                                    )
+
+                                                    pdf_bytes = (
+                                                        blob_client.download_blob().readall()
+                                                    )
+
+                                                    st.markdown(
+                                                        f'<a href="{doc_url}" target="_blank">🔗 View PDF in Browser</a>',
+                                                        unsafe_allow_html=True,
+                                                    )
+
                                                 except Exception as e:
-                                                    st.warning(f"Could not load PDF for download: {str(e)}")
-                                                    # Fallback to just the view link
-                                                    st.markdown(f'<a href="{doc_url}" target="_blank">🔗 View PDF in Browser</a>', unsafe_allow_html=True)
+                                                    st.warning(
+                                                        f"Could not load PDF for download: {str(e)}"
+                                                    )
+
+                                                    st.markdown(
+                                                        f'<a href="{doc_url}" target="_blank">🔗 View PDF in Browser</a>',
+                                                        unsafe_allow_html=True,
+                                                    )
                                             else:
                                                 st.warning("PDF file not accessible")
-                                                
+
                                         except Exception as e:
-                                            st.warning(f"Could not generate PDF link: {str(e)}")
+                                            st.warning(
+                                                f"Could not generate PDF link: {str(e)}"
+                                            )
                                     else:
                                         st.caption("Original PDF file not available")
-                                        
-                                    # Show additional metadata
-                                    if 'date' in metadata:
+
+                                    if "date" in metadata:
                                         st.caption(f"📅 Date: {metadata['date']}")
-                                    if 'session' in metadata:
+                                    if "session" in metadata:
                                         st.caption(f"🏛️ Session: {metadata['session']}")
-                                    if 'page' in metadata:
+                                    if "page" in metadata:
                                         st.caption(f"📖 Page: {metadata['page']}")
-                                        
-                                    # Add separator between sources
+
                                     if i < len(relevant_docs):
                                         st.markdown("---")
-                        
+
                         else:
-                            # For irrelevant queries, show a helpful message without sources
-                            st.info("Alert: This question is not relevant to the ministry affairs.")
-                    
+
+                            st.info(
+                                "Alert: This question is not relevant to the ministry affairs."
+                            )
+
                     else:
                         st.warning("No relevant information found for your question.")
-                        st.info("Try rephrasing your question or selecting a different ministry.")
-                        
+                        st.info(
+                            "Try rephrasing your question or selecting a different ministry."
+                        )
+
                 except Exception as e:
                     st.error(f"Error processing your question: {str(e)}")
                     logger.error(f"Error in main query processing: {e}")
-        
+
         elif search_button:
             st.warning("Please enter a question.")
-        
-        # # Database info
-        # with st.sidebar.expander("System Info"):
-        #     st.write(f"**Environment:** {Config.ENVIRONMENT}")
-        #     st.write(f"**Embedding Model:** {Config.EMBEDDING_MODEL}")
-        #     st.write(f"**Database:** PostgreSQL with pgvector")
-        #     st.write(f"**Storage:** Azure Blob Storage")
-        #     st.write(f"**Selected Ministry:** {selected_ministry}")
-        
-        
+
     except Exception as e:
         st.error(f"Failed to initialize application: {str(e)}")
         logger.error(f"Application initialization error: {e}")
+
 
 if __name__ == "__main__":
     main()

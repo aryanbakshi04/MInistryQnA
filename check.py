@@ -1,4 +1,4 @@
-# Add this to a test script
+
 from src.azure_vector_store import AzureVectorStore
 
 vector_store = AzureVectorStore()

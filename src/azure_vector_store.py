@@ -21,17 +21,18 @@ class Document(Base):
 
     id = sa.Column(sa.String, primary_key=True)
     text = sa.Column(sa.Text, nullable=False)
-    embedding = sa.Column(Vector(384)) 
+    embedding = sa.Column(Vector(384))
     doc_metadata = sa.Column(sa.JSON)
     ministry = sa.Column(sa.String, index=True)
     created_at = sa.Column(sa.DateTime, default=datetime.utcnow)
-    updated_at = sa.Column(sa.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
+    updated_at = sa.Column(
+        sa.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class AzureVectorStore:
     def __init__(self):
-        """Initialize Azure PostgreSQL Vector Store with improved error handling"""
+
         if not Config.POSTGRESQL_URL:
             raise ValueError("POSTGRESQL_URL environment variable is required")
 
@@ -42,10 +43,9 @@ class AzureVectorStore:
             pool_timeout=30,
             pool_recycle=1800,
             pool_pre_ping=True,
-            connect_args={"application_name": "ministryDB_connection"}
+            connect_args={"application_name": "ministryDB_connection"},
         )
 
-        # Create tables if they don't exist
         Base.metadata.create_all(self.engine)
 
         self.Session = sessionmaker(bind=self.engine, expire_on_commit=False)
@@ -54,7 +54,7 @@ class AzureVectorStore:
         self._load_indexed_ministries()
 
     def _load_indexed_ministries(self):
-        """Load indexed ministries from database with error handling"""
+
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -66,33 +66,31 @@ class AzureVectorStore:
                     )
                     self.indexed_ministries = {row[0] for row in result}
                     logger.info(
-                        f"✅ Loaded {len(self.indexed_ministries)} indexed ministries"
+                        f"Loaded {len(self.indexed_ministries)} indexed ministries"
                     )
                     return
             except Exception as e:
                 logger.warning(
-                    f"⚠️  Attempt {attempt + 1} failed to load indexed ministries: {e}"
+                    f"Attempt {attempt + 1} failed to load indexed ministries: {e}"
                 )
                 if attempt < max_retries - 1:
                     time.sleep(2**attempt)  # Exponential backoff
                 else:
-                    logger.error(
-                        "❌ Failed to load indexed ministries after all retries"
-                    )
+                    logger.error("Failed to load indexed ministries after all retries")
                     self.indexed_ministries = set()
 
     def create_embedding(self, text: str) -> List[float]:
-        """Create embedding for text"""
+
         try:
             if not text or not text.strip():
                 raise ValueError("Text cannot be empty")
             return self.model.encode(text.strip()).tolist()
         except Exception as e:
-            logger.error(f"❌ Error creating embedding: {e}")
+            logger.error(f"Error creating embedding: {e}")
             raise
 
     def _safe_session_operation(self, operation_func, max_retries=3):
-        """Execute database operations with proper error handling and retries"""
+
         for attempt in range(max_retries):
             session = None
             try:
@@ -103,29 +101,29 @@ class AzureVectorStore:
 
             except PendingRollbackError as e:
                 logger.warning(
-                    f"⚠️  Transaction rollback required (attempt {attempt + 1}): {e}"
+                    f"Transaction rollback required (attempt {attempt + 1}): {e}"
                 )
                 if session:
                     try:
                         session.rollback()
                         session.close()
                     except Exception as rollback_error:
-                        logger.error(f"❌ Error during rollback: {rollback_error}")
+                        logger.error(f"Error during rollback: {rollback_error}")
 
                 if attempt < max_retries - 1:
-                    time.sleep(2**attempt)  # Exponential backoff
+                    time.sleep(2**attempt)
                     continue
                 else:
                     raise
 
             except SQLAlchemyError as e:
-                logger.error(f"❌ Database error (attempt {attempt + 1}): {e}")
+                logger.error(f"Database error (attempt {attempt + 1}): {e}")
                 if session:
                     try:
                         session.rollback()
                         session.close()
                     except Exception as rollback_error:
-                        logger.error(f"❌ Error during rollback: {rollback_error}")
+                        logger.error(f"Error during rollback: {rollback_error}")
 
                 if attempt < max_retries - 1:
                     time.sleep(2**attempt)
@@ -134,13 +132,13 @@ class AzureVectorStore:
                     raise
 
             except Exception as e:
-                logger.error(f"❌ Unexpected error (attempt {attempt + 1}): {e}")
+                logger.error(f"Unexpected error (attempt {attempt + 1}): {e}")
                 if session:
                     try:
                         session.rollback()
                         session.close()
                     except Exception as rollback_error:
-                        logger.error(f"❌ Error during rollback: {rollback_error}")
+                        logger.error(f"Error during rollback: {rollback_error}")
 
                 if attempt < max_retries - 1:
                     time.sleep(2**attempt)
@@ -153,7 +151,7 @@ class AzureVectorStore:
                     try:
                         session.close()
                     except Exception as close_error:
-                        logger.error(f"❌ Error closing session: {close_error}")
+                        logger.error(f"Error closing session: {close_error}")
 
     def add_documents_batch(
         self,
@@ -161,9 +159,9 @@ class AzureVectorStore:
         ministry: str = None,
         batch_size: int = 10,
     ):
-        """Add documents in smaller batches with proper error handling"""
+
         if not documents:
-            logger.warning("⚠️  No documents provided to add")
+            logger.warning("No documents provided to add")
             return 0
 
         total_added = 0
@@ -172,7 +170,7 @@ class AzureVectorStore:
         for i in range(0, len(documents), batch_size):
             batch = documents[i : i + batch_size]
             logger.info(
-                f"🔄 Processing batch {i//batch_size + 1}/{(len(documents) + batch_size - 1)//batch_size} ({len(batch)} documents)"
+                f"Processing batch {i//batch_size + 1}/{(len(documents) + batch_size - 1)//batch_size} ({len(batch)} documents)"
             )
 
             def batch_operation(session):
@@ -181,15 +179,14 @@ class AzureVectorStore:
                     text = doc.get("text", "").strip()
                     if not text:
                         logger.warning(
-                            f"⚠️  Skipping document with empty text: {doc.get('id', 'unknown')}"
+                            f"Skipping document with empty text: {doc.get('id', 'unknown')}"
                         )
                         continue
 
                     try:
-                        # Create embedding
+
                         embedding = self.create_embedding(text)
 
-                        # Create document
                         db_doc = Document(
                             id=doc.get(
                                 "id", f"doc_{datetime.now().timestamp()}_{added_count}"
@@ -207,7 +204,7 @@ class AzureVectorStore:
 
                     except Exception as e:
                         logger.error(
-                            f"❌ Error processing document {doc.get('id', 'unknown')}: {e}"
+                            f"Error processing document {doc.get('id', 'unknown')}: {e}"
                         )
                         continue
 
@@ -216,36 +213,32 @@ class AzureVectorStore:
             try:
                 batch_added = self._safe_session_operation(batch_operation)
                 total_added += batch_added
-                logger.info(
-                    f"✅ Successfully added {batch_added} documents in this batch"
-                )
+                logger.info(f"Successfully added {batch_added} documents in this batch")
 
-                # Small delay between batches to prevent overwhelming the database
                 time.sleep(0.1)
 
             except Exception as e:
-                logger.error(f"❌ Failed to process batch {i//batch_size + 1}: {e}")
+                logger.error(f"Failed to process batch {i//batch_size + 1}: {e}")
                 continue
 
-        # Update indexed ministries
         if ministry and total_added > 0:
             self.indexed_ministries.add(ministry)
 
         logger.info(
-            f"✅ Successfully added {total_added} total documents for ministry: {ministry}"
+            f"Successfully added {total_added} total documents for ministry: {ministry}"
         )
         return total_added
 
     def add_documents(self, documents: List[Dict[str, Any]], ministry: str = None):
-        """Add documents to vector store using batch processing"""
+
         return self.add_documents_batch(documents, ministry, batch_size=10)
 
     def search_by_text(
         self, query: str, ministry: str, n_results: int = 10
     ) -> List[Dict[str, Any]]:
-        """Search documents by text query with error handling"""
+
         if not query or not query.strip():
-            logger.warning("⚠️  Empty query provided")
+            logger.warning("Empty query provided")
             return []
 
         def search_operation(session):
@@ -289,19 +282,18 @@ class AzureVectorStore:
         try:
             documents = self._safe_session_operation(search_operation)
             logger.info(
-                f"✅ Found {len(documents)} relevant documents for query in {ministry}"
+                f"Found {len(documents)} relevant documents for query in {ministry}"
             )
             return documents
         except Exception as e:
-            logger.error(f"❌ Error searching documents: {e}")
+            logger.error(f"Error searching documents: {e}")
             return []
 
     def is_ministry_indexed(self, ministry: str) -> bool:
-        """Check if ministry is indexed"""
+
         return ministry in self.indexed_ministries
 
     def get_ministry_document_count(self, ministry: str) -> int:
-        """Get document count for a ministry with error handling"""
 
         def count_operation(session):
             result = session.execute(
@@ -313,11 +305,10 @@ class AzureVectorStore:
         try:
             return self._safe_session_operation(count_operation)
         except Exception as e:
-            logger.error(f"❌ Error getting document count for {ministry}: {e}")
+            logger.error(f"Error getting document count for {ministry}: {e}")
             return 0
 
     def clear_ministry_documents(self, ministry: str):
-        """Clear all documents for a specific ministry with error handling"""
 
         def clear_operation(session):
             result = session.execute(
@@ -329,15 +320,12 @@ class AzureVectorStore:
         try:
             deleted_count = self._safe_session_operation(clear_operation)
             self.indexed_ministries.discard(ministry)
-            logger.info(
-                f"✅ Cleared {deleted_count} documents for ministry: {ministry}"
-            )
+            logger.info(f"Cleared {deleted_count} documents for ministry: {ministry}")
         except Exception as e:
-            logger.error(f"❌ Error clearing documents for {ministry}: {e}")
+            logger.error(f"Error clearing documents for {ministry}: {e}")
             raise
 
     def clear_all(self):
-        """Clear all documents with error handling"""
 
         def clear_all_operation(session):
             result = session.execute(sa.text("DELETE FROM documents"))
@@ -346,24 +334,21 @@ class AzureVectorStore:
         try:
             deleted_count = self._safe_session_operation(clear_all_operation)
             self.indexed_ministries.clear()
-            logger.info(f"✅ Cleared {deleted_count} total documents from vector store")
+            logger.info(f"Cleared {deleted_count} total documents from vector store")
         except Exception as e:
-            logger.error(f"❌ Error clearing all documents: {e}")
+            logger.error(f"Error clearing all documents: {e}")
             raise
 
     def get_database_health(self):
-        """Get database health information"""
 
         def health_operation(session):
-            # Test basic connectivity
+
             result = session.execute(sa.text("SELECT 1"))
             connectivity = result.scalar() == 1
 
-            # Get document count
             result = session.execute(sa.text("SELECT COUNT(*) FROM documents"))
             doc_count = result.scalar()
 
-            # Get ministry count
             result = session.execute(
                 sa.text(
                     "SELECT COUNT(DISTINCT ministry) FROM documents WHERE ministry IS NOT NULL"
@@ -381,7 +366,7 @@ class AzureVectorStore:
         try:
             return self._safe_session_operation(health_operation)
         except Exception as e:
-            logger.error(f"❌ Error getting database health: {e}")
+            logger.error(f"Error getting database health: {e}")
             return {
                 "connectivity": False,
                 "total_documents": 0,
