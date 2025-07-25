@@ -121,7 +121,6 @@ def main():
 
         user_question = st.text_area(
             "Ask your question:",
-            placeholder="e.g., What is the budget allocation for education?",
             height=100,
         )
 
