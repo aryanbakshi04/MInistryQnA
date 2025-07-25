@@ -15,4 +15,3 @@ gunicorn==21.2.0
 transformers==4.40.2
 huggingface_hub==0.23.0
 sqlalchemy==2.0.23
-difflib2>=1.0.0 
