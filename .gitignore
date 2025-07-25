@@ -4,3 +4,6 @@ cache/
 *.sqlite3
 __pycache__/
 *.pyc
+scripts/
+bool
+str
