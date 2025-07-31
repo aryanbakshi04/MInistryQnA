@@ -137,16 +137,16 @@ def main():
                             with st.expander("View Source Documents"):
                                 for i, doc in enumerate(relevant_docs, 1):
                                     st.markdown(f"**Source {i}**")
-                                    # | Relevance Score: {doc['relevance_score']:.3f}
+                                    
                                     st.markdown(doc["text"])
 
                                     metadata = doc.get("metadata", {})
                                     filename = extract_filename_from_metadata(metadata)
 
-                                    # Updated PDF link section - Azure Blob Storage first
+                                    
                                     if filename != "document.pdf":
                                         try:
-                                            # Primary: Use Azure Blob Storage (reliable)
+                                            
                                             with st.spinner(f"Generating secure link for {filename}..."):
                                                 doc_url = get_document_sas_url(selected_ministry, filename)
                                             
@@ -157,7 +157,7 @@ def main():
                                                 )
                                                 
                                             else:
-                                                # Fallback: Try original URL from metadata
+                                                
                                                 original_url = metadata.get("original_url")
                                                 if original_url:
                                                     st.markdown(
