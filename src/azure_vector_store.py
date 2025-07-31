@@ -74,7 +74,7 @@ class AzureVectorStore:
                     f"Attempt {attempt + 1} failed to load indexed ministries: {e}"
                 )
                 if attempt < max_retries - 1:
-                    time.sleep(2**attempt)  # Exponential backoff
+                    time.sleep(2**attempt) 
                 else:
                     logger.error("Failed to load indexed ministries after all retries")
                     self.indexed_ministries = set()
@@ -157,7 +157,7 @@ class AzureVectorStore:
         self,
         documents: List[Dict[str, Any]],
         ministry: str = None,
-        batch_size: int = 10,
+        batch_size: int = 3,
     ):
 
         if not documents:
@@ -166,7 +166,7 @@ class AzureVectorStore:
 
         total_added = 0
 
-        # Process documents in batches
+        
         for i in range(0, len(documents), batch_size):
             batch = documents[i : i + batch_size]
             logger.info(
@@ -198,7 +198,7 @@ class AzureVectorStore:
                             or doc.get("metadata", {}).get("ministry"),
                         )
 
-                        # Use merge to handle potential duplicates
+                        
                         session.merge(db_doc)
                         added_count += 1
 

@@ -170,3 +170,19 @@ class DocumentProcessor:
         except Exception as e:
             logger.error(f"Error processing local PDF {pdf_path}: {e}")
             return []
+    
+    def get_pdf_reader_from_bytes(self, pdf_bytes) -> PdfReader:
+        from io import BytesIO
+        return PdfReader(BytesIO(pdf_bytes))
+
+    def extract_text_from_pdf_reader(self, pdf_reader: PdfReader) -> str:
+        text = ""
+        for page in pdf_reader.pages:
+            try:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+            except:
+                continue
+        return text
+

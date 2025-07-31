@@ -135,3 +135,10 @@ class AzureBlobStorage:
         except Exception as e:
             logger.error(f"Error checking existence of {blob_name}: {e}")
             return False
+
+    def upload_bytes(self, data_bytes, blob_name):
+        blob_client = self.blob_service_client.get_blob_client(
+            container=self.container_name, blob=blob_name
+        )
+        blob_client.upload_blob(data_bytes, overwrite=True)
+        logger.info(f"Uploaded {blob_name} to Blob Storage")

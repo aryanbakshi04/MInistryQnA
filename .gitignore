@@ -9,3 +9,7 @@ bool
 str
 .env
 check.py
+count.py
+*.json
+')('source')
+adding_new_pdfs.py

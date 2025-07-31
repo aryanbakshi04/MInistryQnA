@@ -3,19 +3,16 @@ import logging
 import base64
 from datetime import datetime, timedelta
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+
 from src.config import Config
 from src.azure_vector_store import AzureVectorStore
 from src.document_processor import DocumentProcessor
 from src.llm_client import LLMClient
-from src.sansad_client import SansadClient
-
 
 logging.basicConfig(level=Config.get_log_level())
 logger = logging.getLogger(__name__)
 
-
 def is_irrelevant_response(answer_text: str) -> bool:
-
     irrelevance_indicators = [
         "not relevant to",
         "outside the scope",
@@ -31,11 +28,8 @@ def is_irrelevant_response(answer_text: str) -> bool:
     answer_lower = answer_text.lower()
     return any(indicator in answer_lower for indicator in irrelevance_indicators)
 
-
 def get_document_sas_url(ministry: str, filename: str) -> str:
-
     try:
-
         blob_service_client = BlobServiceClient.from_connection_string(
             Config.AZURE_STORAGE_CONNECTION_STRING
         )
@@ -48,7 +42,6 @@ def get_document_sas_url(ministry: str, filename: str) -> str:
         )
 
         try:
-
             blob_client.get_blob_properties()
         except Exception as e:
             logger.warning(f"Blob not found: {blob_name}")
@@ -71,9 +64,7 @@ def get_document_sas_url(ministry: str, filename: str) -> str:
         logger.error(f"Error generating SAS URL for {filename}: {e}")
         return None
 
-
 def extract_filename_from_metadata(metadata: dict) -> str:
-
     for key in ["filename", "source", "file", "document_name"]:
         if key in metadata and metadata[key]:
             filename = metadata[key]
@@ -83,7 +74,6 @@ def extract_filename_from_metadata(metadata: dict) -> str:
             return filename
 
     return "document.pdf"
-
 
 def main():
     st.set_page_config(
@@ -100,10 +90,8 @@ def main():
         st.stop()
 
     try:
-
         vector_store = AzureVectorStore()
         llm_client = LLMClient()
-        sansad_client = SansadClient()
 
         st.sidebar.header("Settings")
 
@@ -111,7 +99,7 @@ def main():
         if not ministries:
             st.warning("No ministries indexed yet. Please run the indexing process.")
             st.sidebar.info(
-                "To index ministries, run: `python scripts/create_ministry_database.py`"
+                "To index ministries, run: `python sansad_client.py <ministry_code>`"
             )
             st.stop()
 
@@ -130,13 +118,11 @@ def main():
         if search_button and user_question.strip():
             with st.spinner("Loading, Please wait..."):
                 try:
-
                     relevant_docs = vector_store.search_by_text(
                         user_question, selected_ministry, n_results=5
                     )
 
                     if relevant_docs:
-
                         context = "\n\n".join([doc["text"] for doc in relevant_docs])
                         answer = llm_client.generate_answer(
                             user_question, context, selected_ministry
@@ -151,62 +137,49 @@ def main():
                             with st.expander("View Source Documents"):
                                 for i, doc in enumerate(relevant_docs, 1):
                                     st.markdown(f"**Source {i}**")
+                                    # | Relevance Score: {doc['relevance_score']:.3f}
                                     st.markdown(doc["text"])
 
                                     metadata = doc.get("metadata", {})
                                     filename = extract_filename_from_metadata(metadata)
 
+                                    # Updated PDF link section - Azure Blob Storage first
                                     if filename != "document.pdf":
                                         try:
-
-                                            with st.spinner(
-                                                f"Generating secure link for {filename}..."
-                                            ):
-                                                doc_url = get_document_sas_url(
-                                                    selected_ministry, filename
-                                                )
-
+                                            # Primary: Use Azure Blob Storage (reliable)
+                                            with st.spinner(f"Generating secure link for {filename}..."):
+                                                doc_url = get_document_sas_url(selected_ministry, filename)
+                                            
                                             if doc_url:
-
-                                                try:
-
-                                                    blob_service_client = BlobServiceClient.from_connection_string(
-                                                        Config.AZURE_STORAGE_CONNECTION_STRING
-                                                    )
-                                                    container_name = (
-                                                        "ministrydatastorage"
-                                                    )
-                                                    blob_name = f"ministries/{selected_ministry}/{filename}"
-                                                    blob_client = blob_service_client.get_blob_client(
-                                                        container=container_name,
-                                                        blob=blob_name,
-                                                    )
-
-                                                    pdf_bytes = (
-                                                        blob_client.download_blob().readall()
-                                                    )
-
-                                                    st.markdown(
-                                                        f'<a href="{doc_url}" target="_blank">🔗 View PDF in Browser</a>',
-                                                        unsafe_allow_html=True,
-                                                    )
-
-                                                except Exception as e:
-                                                    st.warning(
-                                                        f"Could not load PDF for download: {str(e)}"
-                                                    )
-
-                                                    st.markdown(
-                                                        f'<a href="{doc_url}" target="_blank">🔗 View PDF in Browser</a>',
-                                                        unsafe_allow_html=True,
-                                                    )
+                                                st.markdown(
+                                                    f'<a href="{doc_url}" target="_blank">📄 View PDF Document</a>',
+                                                    unsafe_allow_html=True,
+                                                )
+                                                
                                             else:
-                                                st.warning("PDF file not accessible")
-
+                                                # Fallback: Try original URL from metadata
+                                                original_url = metadata.get("original_url")
+                                                if original_url:
+                                                    st.markdown(
+                                                        f'<a href="{original_url}" target="_blank">📄 Try Original PDF Link</a>',
+                                                        unsafe_allow_html=True,
+                                                    )
+                                                else:
+                                                    
+                                                    if filename.startswith(("AS", "AU")):
+                                                        constructed_url = f"https://sansad.in/getFile/loksabhaquestions/annex/185/{filename}?source=pqals"
+                                                        st.markdown(
+                                                            f'<a href="{constructed_url}" target="_blank">📄 View PDF Document</a>',
+                                                            unsafe_allow_html=True,
+                                                        )
+                                                        
+                                                    else:
+                                                        st.warning("PDF file not accessible")
+                                                        
+                                                        
                                         except Exception as e:
-                                            st.warning(
-                                                f"Could not generate PDF link: {str(e)}"
-                                            )
+                                            st.warning(f"Could not generate PDF link: {str(e)}")
+                                            
                                     else:
                                         st.caption("Original PDF file not available")
 
@@ -221,7 +194,6 @@ def main():
                                         st.markdown("---")
 
                         else:
-
                             st.info(
                                 "Alert: This question is not relevant to the ministry affairs."
                             )
@@ -242,7 +214,6 @@ def main():
     except Exception as e:
         st.error(f"Failed to initialize application: {str(e)}")
         logger.error(f"Application initialization error: {e}")
-
 
 if __name__ == "__main__":
     main()
